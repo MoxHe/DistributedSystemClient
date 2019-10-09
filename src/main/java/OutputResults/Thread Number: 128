@@ -1,0 +1,10 @@
+Thread Number: 128
+---------------------------------------------------------
+The number of successful request: 359552
+The number of successful unsuccessful request: 0
+Wall time: 367097 milliseconds
+The mean of all latencies: 97 milliseconds.
+The median of all latencies: 95 milliseconds.
+The throughput: 0 milliseconds.
+The p99 of latencies: 187 milliseconds.
+The max response time: 580 milliseconds.

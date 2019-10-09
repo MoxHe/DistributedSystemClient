@@ -1,0 +1,12 @@
+Thread Number: 256
+---------------------------------------------------------
+The number of successful request: 359552
+The number of successful unsuccessful request: 0
+Wall time: 185819 milliseconds
+The mean of all latencies: 98 milliseconds.
+The median of all latencies: 96 milliseconds.
+The throughput: 1 milliseconds.
+The p99 of latencies: 189 milliseconds.
+The max response time: 1456 milliseconds.
+
+Process finished with exit code 0
