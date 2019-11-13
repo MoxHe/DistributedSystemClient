@@ -24,7 +24,7 @@ public class Record {
   }
 
 
-  public static void writeCSV(BlockingQueue<Record> records, long wallTime, int threadNum) {
+  public static void writeCSV(List<Record> records, long wallTime, int threadNum) {
     final String COMMA = ",";
     try {
       BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(
@@ -54,10 +54,10 @@ public class Record {
     }
   }
 
-  public static void outputResults(int threadNum, BlockingQueue<Record> records, int successReq, int unSuccessReq, long wallTime) {
+  public static void outputResults(int threadNum, List<Record> records, int successReq, int unSuccessReq, long wallTime) {
     List<Long> latencies = new ArrayList<>();
 
-    int latencySum = 0;
+    long latencySum = 0;
     for (Record record: records) {
       latencies.add(record.latency);
       latencySum += record.latency;
@@ -68,12 +68,12 @@ public class Record {
     System.out.println("Thread Number: " + threadNum);
     System.out.println("---------------------------------------------------------");
     System.out.println("The number of successful request: " + successReq);
-    System.out.println("The number of successful unsuccessful request: " + unSuccessReq);
+    System.out.println("The number of unsuccessful request: " + unSuccessReq);
     System.out.println("Wall time: " + wallTime + " milliseconds");
 
     System.out.println("The mean of all latencies: " + latencySum / latencies.size() + " milliseconds.");
     System.out.println("The median of all latencies: " + latencies.get(latencies.size() / 2 - 1) + " milliseconds.");
-    System.out.println("The throughput: " + latencies.size() / wallTime + " milliseconds.");
+    System.out.println("The throughput: " + latencies.size() * 1000 / wallTime + " requests per seconds.");
     System.out.println("The p99 of latencies: " + latencies.get(latencies.size() * 99 / 100 - 1) + " milliseconds.");
     System.out.println("The max response time: " + latencies.get(latencies.size() - 1) + " milliseconds.");
   }

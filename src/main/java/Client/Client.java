@@ -1,131 +1,104 @@
 package Client;
 
 import Data.Record;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class Client {
 
-  private static final int NUMTHREADS = 256;
+  private static int NUMTHREADS;
   private static final int NUMSKIERS = 20000;
   private static final int NUMLIFTS = 40;
   private static final int NUMRUNS = 20;
   private static final int DIVIDEND = 10;
   private static final int FACTOR = 4;
-  private static final int RECORDS_SISE = 400000;
 
-  private static final String URL = "http://54.175.23.161:8080/Server_war";
+  // single server    http://3.88.62.185:8080/Server_war
+  // load balancer    http://servers-1344196229.us-east-1.elb.amazonaws.com:80/Server_war
+  // localhost        http://localhost:8080/Server_war_exploded
+  private static String URL;
 
-  private static CountDownLatch startUpCountDown = new CountDownLatch(1);
-  private static CountDownLatch peakPhaseCountDown = new CountDownLatch(NUMTHREADS / FACTOR / DIVIDEND);
-  private static CountDownLatch coolDownCountDown = new CountDownLatch(NUMTHREADS / DIVIDEND);
+  private static CountDownLatch startUpCountDown;
+  private static CountDownLatch peakPhaseCountDown;
+  private static CountDownLatch coolDownCountDown;
+  private static SingleClient[] threads;
+  private static int idx = 0;
 
-  private static AtomicInteger successReq = new AtomicInteger(0);
-  private static AtomicInteger unSuccessReq = new AtomicInteger(0);
-  private static BlockingQueue<Record> records = new ArrayBlockingQueue<>(RECORDS_SISE);
-
-  public static Thread[] startUp() {
+  private static void startUp() {
 
     int startTime = 0, endTime = 90;
     int skierIdRange = NUMSKIERS / (NUMTHREADS / FACTOR);
 
-    Thread[] threads = new Thread[NUMTHREADS / FACTOR];
-
     for (int i = 0; i < NUMTHREADS / FACTOR; i++) {
-      threads[i] = new Thread(new SingleClient(
-          successReq, unSuccessReq,
+      threads[idx] = new SingleClient(
           i * skierIdRange + 1, (i + 1) * skierIdRange,
           NUMLIFTS,
           startTime, endTime,
           NUMRUNS / DIVIDEND * skierIdRange,
+          false,
           startUpCountDown, peakPhaseCountDown,
-          URL, records));
-    }
+          URL);
 
-    for (Thread thread: threads) {
-      thread.start();
+      threads[idx++].start();
     }
-    return threads;
   }
 
-  public static Thread[] peakPhase() {
+  private static void peakPhase() {
     int startTime = 91, endTime = 360;
     int skierIdRange = NUMSKIERS / NUMTHREADS;
     double factor = 0.8;
 
-    Thread[] threads = new Thread[NUMTHREADS];
-
     for (int i = 0; i < NUMTHREADS; i++) {
-      threads[i] = new Thread(new SingleClient(
-          successReq, unSuccessReq,
+      threads[idx] = new SingleClient(
           i * skierIdRange + 1, (i + 1) * skierIdRange,
           NUMLIFTS,
           startTime, endTime,
           (int) (factor * NUMRUNS) * skierIdRange,
+          false,
           peakPhaseCountDown, coolDownCountDown,
-          URL, records));
+          URL);
+      threads[idx++].start();
     }
-
-    for (Thread thread: threads) {
-      thread.start();
-    }
-    return threads;
   }
 
-  public static Thread[] coolDown() {
+  private static void coolDown() {
 
     int startTime = 361, endTime = 420;
     int skierIdRange = NUMSKIERS / (NUMTHREADS / FACTOR);
 
-    Thread[] threads = new Thread[NUMTHREADS / FACTOR];
-
     for (int i = 0; i < NUMTHREADS / FACTOR; i++) {
-      threads[i] = new Thread(new SingleClient(
-          successReq, unSuccessReq,
+      threads[idx] = new SingleClient(
           i * skierIdRange + 1, (i + 1) * skierIdRange,
           NUMLIFTS,
           startTime, endTime,
           NUMRUNS / DIVIDEND,
+          true,
           coolDownCountDown, null,
-          URL, records));
-    }
+          URL);
 
-    for (Thread thread: threads) {
-      thread.start();
+      threads[idx++].start();
     }
-    return threads;
   }
 
-
   public static void main(String[] args) {
+    NUMTHREADS = Integer.parseInt(args[0]);
+    URL = args[1];
+    startUpCountDown = new CountDownLatch(1);
+    peakPhaseCountDown = new CountDownLatch(NUMTHREADS / FACTOR / DIVIDEND);
+    coolDownCountDown = new CountDownLatch(NUMTHREADS / DIVIDEND);
+    threads = new SingleClient[NUMTHREADS + 2 * NUMTHREADS / FACTOR];
+
 
     long wallStart = System.currentTimeMillis();
 
-    Thread[] startUpThreads = startUp();
-    Thread[] peakPhaseThreads = peakPhase();
-    Thread[] coolDownThreads = coolDown();
+    startUp();
+    peakPhase();
+    coolDown();
 
     startUpCountDown.countDown();
 
-    for (Thread thread: startUpThreads) {
-      try {
-        thread.join();
-      } catch (InterruptedException e) {
-        System.out.println(e.getMessage());
-      }
-    }
-
-    for (Thread thread: peakPhaseThreads) {
-      try {
-        thread.join();
-      } catch (InterruptedException e) {
-        System.out.println(e.getMessage());
-      }
-    }
-
-    for (Thread thread: coolDownThreads) {
+    for (Thread thread: threads) {
       try {
         thread.join();
       } catch (InterruptedException e) {
@@ -135,8 +108,15 @@ public class Client {
 
     long wallTime = System.currentTimeMillis() - wallStart;
 
-    Record.writeCSV(records, wallTime, NUMTHREADS);
+    List<Record> records = new ArrayList<>();
+    int successReq = 0, unSuccessReq = 0;
 
-    Record.outputResults(NUMTHREADS, records, successReq.intValue(), unSuccessReq.intValue(), wallTime);
+    for (SingleClient thread: threads) {
+      successReq += thread.getSuccessReq();
+      unSuccessReq += thread.getUnSuccessReq();
+      records.addAll(thread.getRecords());
+    }
+//    Record.writeCSV(records, wallTime, NUMTHREADS);
+    Record.outputResults(NUMTHREADS, records, successReq, unSuccessReq, wallTime);
   }
 }

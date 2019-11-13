@@ -81,6 +81,11 @@
           </execution>
         </executions>
         <configuration>
+          <archive>
+            <manifest>
+              <mainClass>Client.Client</mainClass>
+            </manifest>
+          </archive>
         </configuration>
       </plugin>
 

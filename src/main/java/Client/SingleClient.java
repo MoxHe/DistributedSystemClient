@@ -5,51 +5,55 @@ import io.swagger.client.ApiClient;
 import io.swagger.client.ApiException;
 import io.swagger.client.api.SkiersApi;
 import io.swagger.client.model.LiftRide;
-import java.util.concurrent.BlockingQueue;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 
-public class SingleClient implements Runnable {
+public class SingleClient extends Thread {
 
-  private AtomicInteger successReq;
-  private AtomicInteger unSuccessReq;
+  private int successReq;
+  private int unSuccessReq;
   private int skierIdStart;
   private int skierIdEnd;
   private int numLifts;
   private int startTime;
   private int endTime;
   private int runTimes;
+  private boolean isPhase3;
   private CountDownLatch startCountDown;
   private CountDownLatch endCountDown;
   private String URL;
-  private BlockingQueue<Record> records;
+  private List<Record> records;
 
 
-  public SingleClient(AtomicInteger successReq, AtomicInteger unSuccessReq, int skierIdStart, int skierIdEnd, int numLifts, int startTime, int endTime,
-      int runTimes, CountDownLatch startCountDown, CountDownLatch endCountDown, String URL, BlockingQueue<Record> records) {
-    this.successReq = successReq;
-    this.unSuccessReq = unSuccessReq;
+  public SingleClient(int skierIdStart, int skierIdEnd, int numLifts, int startTime, int endTime,
+      int runTimes, boolean isPhase3, CountDownLatch startCountDown, CountDownLatch endCountDown, String URL) {
+    this.successReq = 0;
+    this.unSuccessReq = 0;
     this.skierIdStart = skierIdStart;
     this.skierIdEnd = skierIdEnd;
     this.numLifts = numLifts;
     this.startTime = startTime;
     this.endTime = endTime;
     this.runTimes = runTimes;
+    this.isPhase3 = isPhase3;
     this.startCountDown = startCountDown;
     this.endCountDown = endCountDown;
     this.URL = URL;
-    this.records = records;
+    this.records = new ArrayList<>();
   }
 
   @Override
   public void run() {
-
     try {
-      startCountDown.await();
+      if (startCountDown != null) {
+        startCountDown.await();
+      }
       SkiersApi apiInstance = new SkiersApi();
       ApiClient client = apiInstance.getApiClient();
       client.setBasePath(URL);
+
 
       try {
 
@@ -58,16 +62,21 @@ public class SingleClient implements Runnable {
           body.setTime(ThreadLocalRandom.current().nextInt(endTime - startTime + 1) + startTime);
           body.setLiftID(ThreadLocalRandom.current().nextInt(numLifts - 1) + 1);
 
-          long startTime = System.currentTimeMillis();
-          apiInstance.writeNewLiftRide(body, 3, "2019", "22", ThreadLocalRandom.current().nextInt(skierIdEnd - skierIdStart + 1) + skierIdStart);
-          records.add(new Record(startTime, System.currentTimeMillis() - startTime, 201));
+          int skierID = ThreadLocalRandom.current().nextInt(skierIdEnd - skierIdStart + 1) + skierIdStart;
+          long start = System.currentTimeMillis();
+          apiInstance.writeNewLiftRide(body, 3, "2019", "22", skierID);
+          if (isPhase3) {
+            apiInstance.getSkierDayVertical(3, "2019", "22", skierID);
+//            System.out.println("Total vertical: " + vertical);
+          }
+          records.add(new Record(startTime, System.currentTimeMillis() - start, 201));
 
-          successReq.getAndIncrement();
+          successReq++;
         }
       } catch (ApiException e) {
-        records.add(new Record(startTime, System.currentTimeMillis() - startTime, e.getCode()));
-        System.out.println(e.getCode());
-        unSuccessReq.getAndIncrement();
+//        records.add(new Record(startTime, System.currentTimeMillis() - start, e.getCode()));
+//        System.out.println(e.getCode());
+        unSuccessReq++;
       }
 
     } catch (InterruptedException e) {
@@ -79,4 +88,15 @@ public class SingleClient implements Runnable {
     }
   }
 
+  public int getSuccessReq() {
+    return successReq;
+  }
+
+  public int getUnSuccessReq() {
+    return unSuccessReq;
+  }
+
+  public List<Record> getRecords() {
+    return records;
+  }
 }
